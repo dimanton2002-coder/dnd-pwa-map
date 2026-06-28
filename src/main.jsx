@@ -52,8 +52,39 @@ function App(){
     const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='dnd-world.json'; a.click(); URL.revokeObjectURL(a.href);
   }
+  function normalizeImportedData(raw){
+    const next = {...DEFAULT_DATA, ...raw};
+    if(!Array.isArray(next.bounds)) next.bounds = DEFAULT_DATA.bounds;
+    if(typeof next.mapUrl !== 'string' || !next.mapUrl) next.mapUrl = DEFAULT_DATA.mapUrl;
+    if(next.role !== 'master' && next.role !== 'player') next.role = 'master';
+    if(!Array.isArray(next.locations)) next.locations = [];
+    next.locations = next.locations.map((l, index) => ({
+      id: String(l.id || crypto.randomUUID?.() || `${Date.now()}-${index}`),
+      name: String(l.name || 'Без названия'),
+      type: ['city','village','dungeon','region'].includes(l.type) ? l.type : 'city',
+      x: Number.isFinite(Number(l.x)) ? Number(l.x) : 100,
+      y: Number.isFinite(Number(l.y)) ? Number(l.y) : 100,
+      publicText: String(l.publicText || ''),
+      dmText: String(l.dmText || ''),
+      visible: Boolean(l.visible)
+    }));
+    return next;
+  }
   function importJson(file){
-    const reader = new FileReader(); reader.onload = () => { try { setData(JSON.parse(reader.result)); } catch { alert('Не удалось прочитать JSON'); } }; reader.readAsText(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const imported = normalizeImportedData(parsed);
+        setData(imported);
+        setSelected(null);
+        alert('Импорт завершён');
+      } catch (err) {
+        console.error(err);
+        alert('Не удалось прочитать JSON. Проверь, что это файл экспорта dnd-world.json');
+      }
+    };
+    reader.readAsText(file);
   }
   const current = data.locations.find(l=>l.id===selected);
 
@@ -63,7 +94,7 @@ function App(){
       <label>Роль</label>
       <select value={data.role} onChange={e=>setData({...data,role:e.target.value})}><option value="master">Мастер</option><option value="player">Игрок</option></select>
       <label>Поиск</label><input placeholder="Город, руины..." value={query} onChange={e=>setQuery(e.target.value)} />
-      <div className="buttons"><button onClick={exportJson}>Экспорт</button><label className="file">Импорт<input type="file" accept="application/json" onChange={e=>e.target.files[0]&&importJson(e.target.files[0])}/></label></div>
+      <div className="buttons"><button onClick={exportJson}>Экспорт</button><label className="file">Импорт<input type="file" accept="application/json" onChange={e=>{ if(e.target.files[0]) importJson(e.target.files[0]); e.target.value=''; }}/></label></div>
       <p className="hint">Мастер: клик по карте добавляет пин. Данные пока хранятся в браузере.</p>
       <h2>Локации</h2>
       <div className="list">{shown.map(l=><button key={l.id} onClick={()=>setSelected(l.id)} className={selected===l.id?'active':''}>{l.visible?'👁️':'🔒'} {l.name}</button>)}</div>
